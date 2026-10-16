@@ -1,0 +1,79 @@
+name: Income100 fork verification / CI
+
+on:
+  push:
+    branches:
+      - ci/per-service-images
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-quality:
+    name: Sanitized public quality gates
+    runs-on: ubuntu-latest
+    # The full workspace suites take about 25 minutes (review F15).
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          persist-credentials: false
+
+      - name: Verify the exact candidate checkout
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test -z "$(git status --porcelain)"
+          printf 'Verified candidate SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Issue #64 explicitly exempts the upstream export manifest from this contributor change.
+      # Keep the real failure visible; this exception applies only to this fork verification copy.
+      - name: Verify export provenance (expected upstream-manifest mismatch)
+        id: export-provenance
+        continue-on-error: true
+        run: node scripts/verify-export-provenance.mjs .
+
+      - name: Record export provenance outcome
+        if: always()
+        env:
+          PROVENANCE_OUTCOME: ${{ steps.export-provenance.outcome }}
+        run: |
+          printf 'Export provenance outcome: %s. The contributor manifest mismatch is expected under issue #64; this is not a provenance pass.\n' "$PROVENANCE_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create sanitized candidate
+        run: >-
+          node scripts/public-export.mjs
+          --output "$RUNNER_TEMP/spaceapp-public-export"
+
+      - name: Install candidate dependencies
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm ci
+
+      - name: Install ripgrep (the file search tests run the real rg)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+
+      - name: Public release tests
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run test:public
+
+      - name: Typecheck candidate
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run check
+
+      - name: Build candidate
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run build
+
+      - name: Pack launcher candidate
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run pack:dry-run -w run-spaceapp
