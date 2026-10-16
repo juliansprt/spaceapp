@@ -1,4 +1,4 @@
-name: Income100 fork verification / Security
+name: "Income100 PR #124 merge tree verification / Security"
 
 on:
   push:
@@ -23,16 +23,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          repository: juliansprt/spaceapp
+          ref: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify the exact candidate checkout
+      - name: Verify the exact fork merge, parents and tree
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD)" = "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83"
+          test "$(git show -s --format=%P HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd 98bcb3859778b85951c6f15902fe82f156562f9e"
+          test "$(git rev-parse HEAD^{tree})" = "ff1e7c00289b11ec65b8c8a15f212f29d95c68a8"
           test -z "$(git status --porcelain)"
-          printf 'Verified candidate SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Verified PR #124 fork merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Require image scans for fork candidate verification
         id: filter
@@ -67,16 +70,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          repository: juliansprt/spaceapp
+          ref: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify the exact candidate checkout
+      - name: Verify the exact fork merge, parents and tree
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD)" = "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83"
+          test "$(git show -s --format=%P HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd 98bcb3859778b85951c6f15902fe82f156562f9e"
+          test "$(git rev-parse HEAD^{tree})" = "ff1e7c00289b11ec65b8c8a15f212f29d95c68a8"
           test -z "$(git status --porcelain)"
-          printf 'Verified candidate SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Verified PR #124 fork merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -91,12 +97,41 @@ jobs:
       - run: npm run test:public
       - run: npm run public:export:verify
 
-      - name: Secret scan
+      - name: Fetch the separate fork workflow push for its history scan
+        shell: bash
+        run: |
+          git fetch --no-tags origin "$GITHUB_SHA"
+          git cat-file -e "$GITHUB_SHA^{commit}"
+          git merge-base --is-ancestor "f3e72f9451616a97c0727517ac0dac14ef4a6ecd" "$GITHUB_SHA"
+
+      - name: Secret scan of the fork push history
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The action scans the push payload range, not checkout HEAD. Include the candidate commit.
+          GITLEAKS_VERSION: "8.24.3"
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          # Preserve the contributor-plus-wrapper push scan; it does not scan the merge tree.
           BASE_REF: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+
+      - name: Secret scan of the exact virtual merge tree
+        id: merge-tree-secret-scan
+        shell: bash
+        run: |
+          merge_snapshot="$RUNNER_TEMP/spaceapp-pr124-merge-gitleaks"
+          mkdir -p "$merge_snapshot"
+          git archive "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83" | tar -x -C "$merge_snapshot"
+          gitleaks version
+          gitleaks dir --redact --exit-code=2 --report-format=sarif \
+            --report-path="$RUNNER_TEMP/gitleaks-merge-tree.sarif" \
+            --config="$merge_snapshot/.gitleaks.toml" "$merge_snapshot"
+
+      - name: Upload exact merge tree secret scan
+        if: always() && (steps.merge-tree-secret-scan.outcome == 'success' || steps.merge-tree-secret-scan.outcome == 'failure')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gitleaks-pr124-merge-tree
+          path: ${{ runner.temp }}/gitleaks-merge-tree.sarif
+          if-no-files-found: error
 
       - name: Block fixable Medium, High, and Critical filesystem findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -115,8 +150,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         with:
           sarif_file: trivy-filesystem.sarif
-          ref: refs/heads/bounty/per-service-images
-          sha: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          ref: refs/heads/ci/pr124-merge-source
+          sha: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
 
       - name: Capture all filesystem findings
         if: always()
@@ -166,15 +201,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          repository: juliansprt/spaceapp
+          ref: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Verify the exact candidate checkout
+      - name: Verify the exact fork merge, parents and tree
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD)" = "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83"
+          test "$(git show -s --format=%P HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd 98bcb3859778b85951c6f15902fe82f156562f9e"
+          test "$(git rev-parse HEAD^{tree})" = "ff1e7c00289b11ec65b8c8a15f212f29d95c68a8"
           test -z "$(git status --porcelain)"
-          printf 'Verified candidate SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Verified PR #124 fork merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
@@ -186,15 +225,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          repository: juliansprt/spaceapp
+          ref: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Verify the exact candidate checkout
+      - name: Verify the exact fork merge, parents and tree
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD)" = "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83"
+          test "$(git show -s --format=%P HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd 98bcb3859778b85951c6f15902fe82f156562f9e"
+          test "$(git rev-parse HEAD^{tree})" = "ff1e7c00289b11ec65b8c8a15f212f29d95c68a8"
           test -z "$(git status --porcelain)"
-          printf 'Verified candidate SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Verified PR #124 fork merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         with:
@@ -210,8 +253,8 @@ jobs:
 
       - uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         with:
-          ref: refs/heads/bounty/per-service-images
-          sha: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          ref: refs/heads/ci/pr124-merge-source
+          sha: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
 
   image:
     name: Image scan / ${{ matrix.target }}
@@ -229,15 +272,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          repository: juliansprt/spaceapp
+          ref: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Verify the exact candidate checkout
+      - name: Verify the exact fork merge, parents and tree
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD)" = "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83"
+          test "$(git show -s --format=%P HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd 98bcb3859778b85951c6f15902fe82f156562f9e"
+          test "$(git rev-parse HEAD^{tree})" = "ff1e7c00289b11ec65b8c8a15f212f29d95c68a8"
           test -z "$(git status --porcelain)"
-          printf 'Verified candidate SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Verified PR #124 fork merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
@@ -268,8 +315,8 @@ jobs:
         uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3.37.3
         with:
           sarif_file: trivy-${{ matrix.target }}.sarif
-          ref: refs/heads/bounty/per-service-images
-          sha: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          ref: refs/heads/ci/pr124-merge-source
+          sha: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
 
       - name: Capture all image findings
         if: always()

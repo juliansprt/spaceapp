@@ -1,4 +1,4 @@
-name: Income100 fork verification / CI
+name: "Income100 PR #124 merge tree verification / CI"
 
 on:
   push:
@@ -21,15 +21,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: f3e72f9451616a97c0727517ac0dac14ef4a6ecd
+          repository: juliansprt/spaceapp
+          ref: 0fd10d52b1089d973b2cbfb6931bf4f9113bdd83
+          fetch-depth: 2
           persist-credentials: false
 
-      - name: Verify the exact candidate checkout
+      - name: Verify the exact fork merge, parents and tree
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD)" = "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83"
+          test "$(git show -s --format=%P HEAD)" = "f3e72f9451616a97c0727517ac0dac14ef4a6ecd 98bcb3859778b85951c6f15902fe82f156562f9e"
+          test "$(git rev-parse HEAD^{tree})" = "ff1e7c00289b11ec65b8c8a15f212f29d95c68a8"
           test -z "$(git status --porcelain)"
-          printf 'Verified candidate SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Verified PR #124 fork merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -37,8 +41,8 @@ jobs:
           cache: npm
 
       # Issue #64 explicitly exempts the upstream export manifest from this contributor change.
-      # Keep the real failure visible; this exception applies only to this fork verification copy.
-      - name: Verify export provenance (expected upstream-manifest mismatch)
+      # Keep the actual result visible; this exception applies only to this fork verification copy.
+      - name: Verify export provenance (upstream allows contributor mismatch)
         id: export-provenance
         continue-on-error: true
         run: node scripts/verify-export-provenance.mjs .
@@ -48,7 +52,7 @@ jobs:
         env:
           PROVENANCE_OUTCOME: ${{ steps.export-provenance.outcome }}
         run: |
-          printf 'Export provenance outcome: %s. The contributor manifest mismatch is expected under issue #64; this is not a provenance pass.\n' "$PROVENANCE_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Export provenance outcome: %s. Issue #64 allows an upstream-manifest mismatch for contributor changes; this records the actual outcome.\n' "$PROVENANCE_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create sanitized candidate
         run: >-
