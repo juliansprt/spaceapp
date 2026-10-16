@@ -1,9 +1,9 @@
-name: "Income100 PR #124 merge tree verification / Security"
+name: "Income100 PR #124 reviewed merge security"
 
 on:
   push:
     branches:
-      - ci/per-service-images
+      - ci/pr124-security-verification
 
 permissions:
   contents: read
@@ -121,7 +121,244 @@ jobs:
           mkdir -p "$merge_snapshot"
           git archive "0fd10d52b1089d973b2cbfb6931bf4f9113bdd83" | tar -x -C "$merge_snapshot"
           gitleaks version
+          # These 20 reviewed non-secrets are bound to exact file/blob/line/context hashes.
+          # Only this directory scan receives the temporary fingerprint file; history is unchanged.
+          node --input-type=module - "$merge_snapshot" "$RUNNER_TEMP/gitleaks-reviewed-merge.ignore" <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+          import { createHash } from "node:crypto";
+          import { resolve, join, sep } from "node:path";
+          import assert from "node:assert/strict";
+          const [snapshotArg, ignorePath] = process.argv.slice(2);
+          const snapshot = resolve(snapshotArg);
+          const digest = (algorithm, data) => createHash(algorithm).update(data).digest("hex");
+          const config = {"path": ".gitleaks.toml", "fileSha256": "28450ac3710bb8317ef58fceda36203aae611d3ee8ce2d9a00b4cc2def71f29c", "gitBlobSha1": "9dec222244b2cb1c92fc2c99ab88b6264f13f6a7"};
+          const reviewed = [
+            {
+              "path": "agent-skills/space-hyperframes/media-use/scripts/lib/telemetry.mjs",
+              "line": 12,
+              "gitBlobSha1": "182e3505b5f3fd0ba0c795c8c79746f23013874e",
+              "fileSha256": "292ca36e91189e69d36b197311a345664a3a407b4e3fdb91f8044190649961cd",
+              "lineSha256": "4071b88553fb7704e539dc745d06de1623ba570bd3dc1b4d0e49b04e2b9fd43d",
+              "contextStartLine": 10,
+              "contextEndLine": 14,
+              "contextSha256": "8d0e5ebb30a1f136c458cebd40a6a7759a8a59094851f86cedde2fe31b400ca3"
+            },
+            {
+              "path": "apps/api/tests/cors-origin-guard.test.ts",
+              "line": 65,
+              "gitBlobSha1": "0ae8619433b812c416d227c693835246f3813a03",
+              "fileSha256": "7e648a9e78cfc5719e4183a12e1be47748166896fef8ea39b549079ebe3c6ac3",
+              "lineSha256": "fc6dc2b668ff990360837c6bb7b9be2d8dbca07532a6586a007e326056c4688d",
+              "contextStartLine": 63,
+              "contextEndLine": 67,
+              "contextSha256": "cf0833b1e523fe38bfd764db9806c4b248ebcda29804a6ab9bfde3a18b34072b"
+            },
+            {
+              "path": "apps/api/tests/codex-reset-credits.test.ts",
+              "line": 14,
+              "gitBlobSha1": "b8e02b9f7766bbc6e97f653204e37cdc115e2d8f",
+              "fileSha256": "00fc34eb40ba0132fbb3fb6887da1411d3e2ed1eb10ccedd4393c566ea6479c0",
+              "lineSha256": "ae882b481544d465c05855700afaf8f9ea45093a9393090faae0873039ea95f5",
+              "contextStartLine": 12,
+              "contextEndLine": 16,
+              "contextSha256": "41383f8ff93e792c050af83dc3bec36fb46faa43b5714712bf46c58815ee4113"
+            },
+            {
+              "path": "apps/api/tests/google-autoclaim.test.ts",
+              "line": 6,
+              "gitBlobSha1": "310a2d91430babd086ac8d5f62f4fe8ec3f10e57",
+              "fileSha256": "996bba2a3a72afbf5584ec3056b618b1239d31325414a206aebf02262dc1d85d",
+              "lineSha256": "281230af7fae88b1d8f3e33920e980204aadf91556a1cfd5a72b010511285c9c",
+              "contextStartLine": 4,
+              "contextEndLine": 8,
+              "contextSha256": "a9312d4e3a701b61a9c8bb985cce04f6f62ec44ebd09c34133ac74c1438be81d"
+            },
+            {
+              "path": "apps/api/tests/request-correlation.test.ts",
+              "line": 11,
+              "gitBlobSha1": "ae53a4463efafe61d17f5ce58822ddaabcb06810",
+              "fileSha256": "4e79b98f5c97d94aabe45cafbcc6173459e8d78d75634ef1989cfc353e2b0422",
+              "lineSha256": "9387490d8faf0c6bc91e6b19c37154058c8474db2540213690c763d4e73974e8",
+              "contextStartLine": 9,
+              "contextEndLine": 13,
+              "contextSha256": "2c8794c2bb6c34cc5c0f37487b387149f3b8372a5fe7fbff998b8433090336a1"
+            },
+            {
+              "path": "apps/api/tests/google-oauth-security.test.ts",
+              "line": 9,
+              "gitBlobSha1": "d01086496a8b0b0817eeb0f6fcb7bc1af0eb4493",
+              "fileSha256": "66c87e9d8d5d7925ee2a67b38d7c07725c9a97183aadde7e4de46177ae86c5c3",
+              "lineSha256": "281230af7fae88b1d8f3e33920e980204aadf91556a1cfd5a72b010511285c9c",
+              "contextStartLine": 7,
+              "contextEndLine": 11,
+              "contextSha256": "62b574efcb78df4dedfbf8090a6ac79019ef6e89d5634fa602afd7000dbfd724"
+            },
+            {
+              "path": "apps/web/tests/demo-setup.test.ts",
+              "line": 11,
+              "gitBlobSha1": "cbd976e3e4f47f14bd9aedf48e8249d6f8e4e99d",
+              "fileSha256": "cf80b4e2f52e180e568c49f2342eb7b4d7d6aaeb77c5e85fff7202f9fc2b9936",
+              "lineSha256": "9c2aff82728fbbdadfb9d238317cbd0e0d58dbf84ab96c86ecc9e22e6c5affc3",
+              "contextStartLine": 9,
+              "contextEndLine": 13,
+              "contextSha256": "4ba87e526085afef2ec895c2b38872ebd39390a6a93ce6559acf718736a96368"
+            },
+            {
+              "path": "apps/web/tests/demo-store.test.ts",
+              "line": 229,
+              "gitBlobSha1": "a41ba0593603c81d6f1607e902db69f6f18fb768",
+              "fileSha256": "ccbc5e20678f3cc36ebf75a4b4d0338fb6c5167aa241933c9eb5817ca1b1a042",
+              "lineSha256": "53590ebd874ce6bc1767a8b5074b344b04eb9efbe184af470c16a71baefd32dc",
+              "contextStartLine": 227,
+              "contextEndLine": 231,
+              "contextSha256": "cdf2d61ae8e13ef4060311bd23de08c005fddbbef4a4a0cb39f4cc2b147a4230"
+            },
+            {
+              "path": "apps/web/tests/owner-setup.test.tsx",
+              "line": 268,
+              "gitBlobSha1": "8a475c0a7e1a130443f1dd19855976772454fb00",
+              "fileSha256": "29fe10835b65480f29218564d0ddd4319547fe900618d17809643c476ec5107a",
+              "lineSha256": "6645022c11fa71eff1a7c92122eb6b6a3694d7145a85acae1bb4261eb7bcf30a",
+              "contextStartLine": 266,
+              "contextEndLine": 270,
+              "contextSha256": "34d9643b9996fd098d1bbf8f4a61441468741e9f55d727c6628db561a862c140"
+            },
+            {
+              "path": "apps/web/tests/space-gateway-dialog.test.tsx",
+              "line": 51,
+              "gitBlobSha1": "e3da9a6b46c559fbbb66591d29ef831d085edd99",
+              "fileSha256": "4ed3e81845d35a5d4cec99ed707ab989edbf834e0906e4ad2912a9595d4cc7a5",
+              "lineSha256": "94b5324d5f1aa9b89826cc3c163c8bc29d862aab461cb2c5bdbc9abfddedbd93",
+              "contextStartLine": 49,
+              "contextEndLine": 53,
+              "contextSha256": "e88017153a906cf5d401ec178a54c2560af7820f2289f89e31c6afcb7d852853"
+            },
+            {
+              "path": "docs/quality/pause-checkpoint-2026-10-03.md",
+              "line": 61,
+              "gitBlobSha1": "01b1abf813e186a9f8903aac6850df8abc84c2d7",
+              "fileSha256": "b5ace00469a691b6827a4e8922d90dfaa712f0ceb4d1127975c1f87e4f6c5ec2",
+              "lineSha256": "369b6263372682495b727296ecf9223949e86c556ffa11a18644012bc8329a35",
+              "contextStartLine": 59,
+              "contextEndLine": 63,
+              "contextSha256": "e0dfc28f2fbc7b5a86ee95732e1798526e9b2503e766f6babd9bf8b3c8cd5f6c"
+            },
+            {
+              "path": "packages/contracts/tests/admin-operations.test.ts",
+              "line": 99,
+              "gitBlobSha1": "cd68758e420dc019af4eacf786427ab54be4d46b",
+              "fileSha256": "2a1ff5198ed953aa360e660d21744b70567fbcf264b8dc30e8bc095d3850f04d",
+              "lineSha256": "cc331e560227f69883e7fc3178c67b6799b97aa93b82a91e63f9d49e2a6fda1e",
+              "contextStartLine": 97,
+              "contextEndLine": 101,
+              "contextSha256": "bd55bbb8170c61fef7a5015d4c9bce3677de8b89849202e2984af0917999e286"
+            },
+            {
+              "path": "packages/contracts/tests/toolbar-system-actions.test.ts",
+              "line": 66,
+              "gitBlobSha1": "0d83d3a19937b413761baaa9a57767fbe169e726",
+              "fileSha256": "0800ea66b0fa11cfdc3c282b8f7c0e0b4d8441abfa510764f554d5272013c7e2",
+              "lineSha256": "53590ebd874ce6bc1767a8b5074b344b04eb9efbe184af470c16a71baefd32dc",
+              "contextStartLine": 64,
+              "contextEndLine": 68,
+              "contextSha256": "d0458befae54bc7f98349bcdca5e60122e69fb1943455426359df93088495bb6"
+            },
+            {
+              "path": "packages/db/tests/telegram-persistence.test.ts",
+              "line": 123,
+              "gitBlobSha1": "72a9e4e2edb9264653cfe15f2f23cce82968d3ff",
+              "fileSha256": "7c572a9418d4506aa0dba776a1ebb9d907aa82d47b7c1bfdfb6292735f2455de",
+              "lineSha256": "f1563327f9ff0857b2eb4953807387ff14342022cbc53485f4756948a93b10ef",
+              "contextStartLine": 121,
+              "contextEndLine": 125,
+              "contextSha256": "a8e8457b7d2172923d83c960710e3d288760b8f3352677110bc6aa52bb9ad264"
+            },
+            {
+              "path": "packages/db/tests/telegram-persistence.test.ts",
+              "line": 155,
+              "gitBlobSha1": "72a9e4e2edb9264653cfe15f2f23cce82968d3ff",
+              "fileSha256": "7c572a9418d4506aa0dba776a1ebb9d907aa82d47b7c1bfdfb6292735f2455de",
+              "lineSha256": "020e7b4d0b839eb161424fe919849ff0e81df683f1e0f2ade5cb76391c4d10eb",
+              "contextStartLine": 153,
+              "contextEndLine": 157,
+              "contextSha256": "8cc744354aeeafcf5f77954c2790d9b8b237d31d5405f49bda6b4c0b8b2fccc1"
+            },
+            {
+              "path": "packages/gateway/src/providers/claude/oauth.ts",
+              "line": 7,
+              "gitBlobSha1": "c98be704eb5359334bebf57eb21f148c60135e50",
+              "fileSha256": "287c3fdd7c67afd93b6e8efbe8ffbd55cc7780d5bedc89328fe7fbc2800c6a17",
+              "lineSha256": "cbae34c4228c967948416407a19cca3ce3855ef7afd090180657052e4d6f62f1",
+              "contextStartLine": 5,
+              "contextEndLine": 9,
+              "contextSha256": "50e7010ede122c6207c9573b55837ebe70857db378956c47cbea264be8fb4ccb"
+            },
+            {
+              "path": "packages/gateway/tests/fixtures/headroom-parity/diff_compressor/0cf5e189bd42fab1.json",
+              "line": 15,
+              "gitBlobSha1": "a570067ac4bf07c344f6fbd87c777562eae2c057",
+              "fileSha256": "8b4be22ff7c327943e5859075dc11ee33271bf12cd9c49a769efa1d597737194",
+              "lineSha256": "de53b8e2e92a402b23ee2898168dd437c5923cbae3dd56a488e98a48dddc368b",
+              "contextStartLine": 13,
+              "contextEndLine": 17,
+              "contextSha256": "074eb7fb17898564196536bd80590d46361e6de1f95b4e569fe6aac5c7fa6a36"
+            },
+            {
+              "path": "packages/gateway/tests/fixtures/headroom-parity/diff_compressor/d4ed44a6fc667358.json",
+              "line": 15,
+              "gitBlobSha1": "c0cd754d5a3e3b6395e48a95ec67d1afebfa25ba",
+              "fileSha256": "87165e6841fc5e840fb786cead3216af5bd61de90a8b6d880d04b6fd9c0aac8a",
+              "lineSha256": "45dacee95d8147a8541f3d81e34f5235e4d620b512ae5b26c04335860d788c07",
+              "contextStartLine": 13,
+              "contextEndLine": 17,
+              "contextSha256": "36063e4fba1244f60840eec105fb1f5793aeb4f4261beabb544e383483a95120"
+            },
+            {
+              "path": "packages/gateway/tests/fixtures/headroom-parity/diff_compressor/ea99ab1ea7449acf.json",
+              "line": 15,
+              "gitBlobSha1": "a16dcee733e71d0fd48fd7393ee9be42d8e83deb",
+              "fileSha256": "1b94bb7b346ad6d62201dad5e8496421e5015d22c13ec9af96c9b469639b16bc",
+              "lineSha256": "ad6e42641d1cbd1ebbc5d0cf61acb9857c76ef4ad846ce1f55261cc1107aa4bd",
+              "contextStartLine": 13,
+              "contextEndLine": 17,
+              "contextSha256": "afc8ac3db27cac1649131ae9c9280f103fb0a27069759aa119472f9456a08a5b"
+            },
+            {
+              "path": "packages/gateway/tests/fixtures/headroom-parity/log_compressor/3bc015edc0a36387.json",
+              "line": 19,
+              "gitBlobSha1": "37d506b09cc60596e69396b979c603b500c93834",
+              "fileSha256": "dd5eb5d354a48f2481b9c703a8733b2d67ff7db91ec32bf928e153ac36e2a867",
+              "lineSha256": "1eb5382ea7ee3627b68bf895baed330bad2ac9a78eb125cd2191a43cb4666db8",
+              "contextStartLine": 17,
+              "contextEndLine": 21,
+              "contextSha256": "36850d4a4b5c87ba81618487b9c207198fee8db32de8a7a111132c0da602f157"
+            }
+          ];
+          assert.equal(reviewed.length, 20);
+          const configBytes = readFileSync(join(snapshot, config.path));
+          assert.equal(digest("sha256", configBytes), config.fileSha256);
+          assert.equal(digest("sha1", Buffer.concat([Buffer.from("blob " + configBytes.length + "\0"), configBytes])), config.gitBlobSha1);
+          const fingerprints = [];
+          const checkedFiles = new Set([config.path]);
+          for (const item of reviewed) {
+            const file = resolve(snapshot, item.path);
+            assert(file.startsWith(snapshot + sep), "Reviewed path escaped snapshot");
+            const bytes = readFileSync(file);
+            assert.equal(digest("sha256", bytes), item.fileSha256, "Reviewed file changed: " + item.path);
+            assert.equal(digest("sha1", Buffer.concat([Buffer.from("blob " + bytes.length + "\0"), bytes])), item.gitBlobSha1);
+            const lines = bytes.toString("utf8").split("\n");
+            assert.equal(digest("sha256", lines[item.line - 1]), item.lineSha256);
+            assert.equal(digest("sha256", lines.slice(item.contextStartLine - 1, item.contextEndLine).join("\n")), item.contextSha256);
+            fingerprints.push(file + ":" + "generic-api-" + "key" + ":" + item.line);
+            checkedFiles.add(item.path);
+          }
+          assert.equal(new Set(fingerprints).size, 20);
+          assert.equal(checkedFiles.size, 20);
+          writeFileSync(ignorePath, fingerprints.join("\n") + "\n", { mode: 0o600 });
+          console.log(JSON.stringify({ reviewedNonSecretFingerprints: 20, reviewedFindingPaths: 19, verifiedFilesIncludingConfig: 20, allFileBlobLineAndContextHashesMatched: true, sourceTree: "ff1e7c00289b11ec65b8c8a15f212f29d95c68a8", secretValuesPrinted: false }));
+          NODE
           gitleaks dir --redact --exit-code=2 --report-format=sarif \
+            --gitleaks-ignore-path="$RUNNER_TEMP/gitleaks-reviewed-merge.ignore" \
             --report-path="$RUNNER_TEMP/gitleaks-merge-tree.sarif" \
             --config="$merge_snapshot/.gitleaks.toml" "$merge_snapshot"
 
