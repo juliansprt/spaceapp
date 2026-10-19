@@ -1,0 +1,80 @@
+name: "Income100 PR #124 2026-10-19 merge fa435e8 / Containers"
+
+on:
+  push:
+    branches:
+      - ci/pr124-integration-20261019
+
+permissions:
+  contents: read
+
+concurrency:
+  group: containers-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.target }} / linux-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - core
+          - browser
+          - cli
+        arch:
+          - amd64
+          - arm64
+    # Exercise Chromium's process model on the image's native architecture.
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: juliansprt/spaceapp
+          ref: fa435e811b5712130cf46ec2b77c35f809e4bf7d
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify the exact PR merge, parents and tree
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "fa435e811b5712130cf46ec2b77c35f809e4bf7d"
+          test "$(git show -s --format=%P HEAD)" = "14117daa987f76b6418b2ecb123f17c30dfa11f8 f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD^{tree})" = "61c844e179b280ac570a3f9678cf79672a3e1134"
+          test -z "$(git status --porcelain)"
+          printf 'Verified PR #124 exact virtual merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          load: true
+          tags: spaceapp-ci:${{ matrix.target }}-${{ matrix.arch }}
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.target }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}-${{ matrix.arch }}
+
+      - name: Enforce container size budget
+        run: >-
+          node scripts/container-image-size-budget.mjs
+          --target "${{ matrix.target }}"
+          --image "spaceapp-ci:${{ matrix.target }}-${{ matrix.arch }}"
+
+      - name: Smoke the service entrypoint and runtime
+        timeout-minutes: 10
+        run: >-
+          node scripts/container-service-smoke.mjs
+          --target "${{ matrix.target }}"
+          --image "spaceapp-ci:${{ matrix.target }}-${{ matrix.arch }}"
+          --arch "${{ matrix.arch }}"

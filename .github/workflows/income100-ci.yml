@@ -1,0 +1,83 @@
+name: "Income100 PR #124 2026-10-19 merge fa435e8 / CI"
+
+on:
+  push:
+    branches:
+      - ci/pr124-integration-20261019
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-quality:
+    name: Sanitized public quality gates
+    runs-on: ubuntu-latest
+    # The full workspace suites take about 25 minutes (review F15).
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: juliansprt/spaceapp
+          ref: fa435e811b5712130cf46ec2b77c35f809e4bf7d
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify the exact PR merge, parents and tree
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "fa435e811b5712130cf46ec2b77c35f809e4bf7d"
+          test "$(git show -s --format=%P HEAD)" = "14117daa987f76b6418b2ecb123f17c30dfa11f8 f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD^{tree})" = "61c844e179b280ac570a3f9678cf79672a3e1134"
+          test -z "$(git status --porcelain)"
+          printf 'Verified PR #124 exact virtual merge SHA: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Issue #64 explicitly exempts the upstream export manifest from this contributor change.
+      # Keep the actual result visible; this exception applies only to this fork verification copy.
+      - name: Verify export provenance (upstream allows contributor mismatch)
+        id: export-provenance
+        continue-on-error: true
+        run: node scripts/verify-export-provenance.mjs .
+
+      - name: Record export provenance outcome
+        if: always()
+        env:
+          PROVENANCE_OUTCOME: ${{ steps.export-provenance.outcome }}
+        run: |
+          printf 'Export provenance outcome: %s. Issue #64 allows an upstream-manifest mismatch for contributor changes; this records the actual outcome.\n' "$PROVENANCE_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create sanitized candidate
+        run: >-
+          node scripts/public-export.mjs
+          --output "$RUNNER_TEMP/spaceapp-public-export"
+
+      - name: Install candidate dependencies
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm ci
+
+      - name: Install ripgrep and ffmpeg (upstream public tests require both)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep ffmpeg
+
+      - name: Public release tests
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run test:public
+
+      - name: Typecheck candidate
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run check
+
+      - name: Build candidate
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run build
+
+      - name: Pack launcher candidate
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run pack:dry-run -w run-spaceapp
