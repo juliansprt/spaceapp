@@ -1,9 +1,9 @@
-name: "Income100 PR #124 2026-10-19 merge fa435e8 / Original Security policy"
+name: "Income100 PR #124 2026-10-19 merge fa435e8 / Original Security policy (checkout guard repair)"
 
 on:
   push:
     branches:
-      - ci/pr124-integration-20261019
+      - ci/pr124-security-original-20261019
 permissions:
   contents: read
   security-events: write
@@ -168,6 +168,7 @@ jobs:
         with:
           repository: juliansprt/spaceapp
           ref: fa435e811b5712130cf46ec2b77c35f809e4bf7d
+          fetch-depth: 2
           persist-credentials: false
 
       - name: Verify the exact PR merge, parents and tree
@@ -191,6 +192,7 @@ jobs:
         with:
           repository: juliansprt/spaceapp
           ref: fa435e811b5712130cf46ec2b77c35f809e4bf7d
+          fetch-depth: 2
           persist-credentials: false
 
       - name: Verify the exact PR merge, parents and tree
@@ -234,6 +236,7 @@ jobs:
         with:
           repository: juliansprt/spaceapp
           ref: fa435e811b5712130cf46ec2b77c35f809e4bf7d
+          fetch-depth: 2
           persist-credentials: false
 
       - name: Verify the exact PR merge, parents and tree
