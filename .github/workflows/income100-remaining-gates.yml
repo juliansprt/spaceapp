@@ -1,0 +1,121 @@
+name: "Income100 PR124 remaining gates only - not full CI"
+on:
+  push:
+    branches:
+      - ci/pr124-remaining-gates-20261019
+permissions:
+  contents: read
+  security-events: write
+concurrency:
+  group: remaining-pr124-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  candidate-compile:
+    name: "6f3 sanitized typecheck build and pack only"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: juliansprt/spaceapp
+          ref: 6f3c888d0ed5f5e07dbdd27ae21140620c613cc7
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Assert exact candidate and scope
+        run: |
+          test "$(git rev-parse HEAD)" = "6f3c888d0ed5f5e07dbdd27ae21140620c613cc7"
+          test "$(git rev-parse HEAD^{tree})" = "9f47419daf14abe3bffd2f4f58b177b144821276"
+          test "$(git show -s --format=%P HEAD)" = "adb96ac77531649bd335078aacaa0318ce1d20a2 f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test -z "$(git status --porcelain)"
+          echo "PARTIAL verification: existing full Quality39300176303 and SourceSecurity39300519847 remain failed. This run only executes their previously skipped independent gates. No tests, native matrix, CodeQL, image scans or release publication are claimed here." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Source hygiene preflight
+        run: npm run hygiene:preflight
+      - name: Create sanitized candidate
+        run: node scripts/public-export.mjs --output "$RUNNER_TEMP/spaceapp-public-export"
+      - name: Install locked candidate dependencies
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm ci
+      - name: Typecheck candidate
+        id: check
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run check
+      - name: Build candidate
+        if: ${{ !cancelled() && steps.check.outcome != 'skipped' }}
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run build
+      - name: Pack launcher candidate dry run
+        if: ${{ !cancelled() && steps.check.outcome != 'skipped' }}
+        working-directory: ${{ runner.temp }}/spaceapp-public-export
+        run: npm run pack:dry-run -w run-spaceapp
+  source-gates:
+    name: "6f3 remaining source security gates only"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: juliansprt/spaceapp
+          ref: 6f3c888d0ed5f5e07dbdd27ae21140620c613cc7
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Assert exact source and unchanged policy
+        run: |
+          test "$(git rev-parse HEAD)" = "6f3c888d0ed5f5e07dbdd27ae21140620c613cc7"
+          test "$(git rev-parse HEAD^{tree})" = "9f47419daf14abe3bffd2f4f58b177b144821276"
+          test "$(git show -s --format=%P HEAD)" = "adb96ac77531649bd335078aacaa0318ce1d20a2 f3e72f9451616a97c0727517ac0dac14ef4a6ecd"
+          test "$(git rev-parse HEAD:.github/workflows/security.yml)" = "2037abc5a1dc81b3d1075703eed0d35dcc665a7a"
+          test -z "$(git status --porcelain)"
+          echo "PARTIAL source gates. Existing full suites remain failed. Original scanner actions, severities, fixable policy and exit codes retained; no ignores added. No CodeQL/image/release rerun." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install source locked dependencies
+        id: install
+        run: npm ci
+      - name: Audit dependencies
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm audit --audit-level=high
+      - name: Verify public export
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run public:export:verify
+      - name: Secret scan - original history policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Block fixable Medium High and Critical filesystem findings
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          limit-severities-for-sarif: true
+          output: trivy-filesystem.sarif
+          severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Upload blocking filesystem scan
+        if: ${{ always() && hashFiles('trivy-filesystem.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07
+        with:
+          sarif_file: trivy-filesystem.sarif
+      - name: Generate source SBOM
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: spdx-json
+          output-file: spaceapp-source.spdx.json
+      - name: Upload source SBOM
+        if: ${{ always() && hashFiles('spaceapp-source.spdx.json') != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: source-sbom
+          path: spaceapp-source.spdx.json
+          if-no-files-found: error
