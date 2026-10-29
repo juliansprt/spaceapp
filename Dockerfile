@@ -9,7 +9,7 @@ COPY . .
 RUN npm ci --no-audit --no-fund \
     && npm run build \
     && npm prune --omit=dev \
-    && find node_modules -type f \( -name '*.js.map' -o -name '*.mjs.map' -o -name '*.cjs.map' -o -name '*.css.map' \) -delete
+    && node --experimental-vm-modules scripts/stage-container-runtime.mjs --output /runtime
 
 FROM node:22.23.4-trixie-slim@sha256:8eb619e402eaede1748a3c8173bffab391592812e85136452f781741c7242ddf AS runtime-base
 ARG TARGETARCH
@@ -54,17 +54,10 @@ RUN npm install --global --ignore-scripts --no-audit --no-fund "npm@${NPM_VERSIO
     && groupadd --gid 10001 spaceapp \
     && useradd --uid 10001 --gid 10001 --create-home --home-dir /var/lib/spaceapp-cli --shell /bin/bash spaceapp
 WORKDIR /app
-COPY --from=build --chown=spaceapp:spaceapp /app/package.json /app/package-lock.json ./
-COPY --from=build --chown=spaceapp:spaceapp /app/node_modules ./node_modules
-COPY --from=build --chown=spaceapp:spaceapp /app/apps ./apps
-COPY --from=build --chown=spaceapp:spaceapp /app/packages ./packages
-COPY --from=build --chown=spaceapp:spaceapp /app/agent-skills ./agent-skills
-COPY --from=build --chown=spaceapp:spaceapp /app/LICENSE /app/NOTICE /app/THIRD_PARTY_NOTICES.md ./
+# Keep only common operating-system/runtime tooling in this layer. Each target
+# copies its own staged application and dependency closure below; removing files
+# inherited from a full monorepo layer would not reduce the image download.
 COPY --from=build --chown=spaceapp:spaceapp /app/THIRD_PARTY_LICENSES ./THIRD_PARTY_LICENSES
-COPY --from=build --chown=spaceapp:spaceapp /app/scripts/reset-owner-password.mjs ./scripts/reset-owner-password.mjs
-COPY --from=build --chown=spaceapp:spaceapp /app/scripts/rotate-owner-setup-token.mjs ./scripts/rotate-owner-setup-token.mjs
-COPY --from=build --chown=spaceapp:spaceapp /app/scripts/portable-backup.mjs ./scripts/portable-backup.mjs
-COPY --from=build --chown=spaceapp:spaceapp /app/scripts/portable-restore.mjs ./scripts/portable-restore.mjs
 COPY --chown=spaceapp:spaceapp deploy/docker ./deploy/docker
 RUN chmod 0755 deploy/docker/core-entrypoint.sh deploy/docker/browser-entrypoint.sh deploy/docker/cli-entrypoint.sh \
     && install -m 0755 deploy/docker/public-cli-wrapper.sh /usr/local/bin/spaceapp-cli-wrapper \
@@ -73,6 +66,7 @@ RUN chmod 0755 deploy/docker/core-entrypoint.sh deploy/docker/browser-entrypoint
        done
 
 FROM runtime-base AS core
+COPY --from=build --chown=spaceapp:spaceapp /runtime/core/ ./
 COPY --chown=spaceapp:spaceapp starter-memory /opt/spaceapp/starter-memory
 # The Databases tool's SQLite worker (apps/api/src/databases/sqlite-worker.py) needs Python 3.12+ with its sqlite3 module;
 # python3-minimal has no sqlite3 (1.1.7 review: SQLite could not run in public installations).
@@ -91,8 +85,9 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=5 \
 ENTRYPOINT ["/app/deploy/docker/core-entrypoint.sh"]
 
 FROM runtime-base AS browser
+COPY --from=build --chown=spaceapp:spaceapp /runtime/browser/ ./
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium fonts-liberation liblzma5 \
+    && apt-get install -y --no-install-recommends chromium fonts-liberation liblzma5 xvfb \
     && rm -rf /var/lib/apt/lists/* \
     && install -d -o spaceapp -g spaceapp -m 0700 \
       /var/lib/spaceapp \
@@ -103,16 +98,30 @@ ENV SPACE_BROWSER_CHROME_PATH=/usr/bin/chromium \
 ENTRYPOINT ["/app/deploy/docker/browser-entrypoint.sh"]
 
 FROM runtime-base AS cli
+COPY --from=build --chown=spaceapp:spaceapp /runtime/cli/ ./
 COPY --chown=root:root starter-memory/AGENTS.md /etc/AGENTS.md
 COPY --chown=root:root starter-memory/installation-guide.md /etc/spaceapp-installation-guide.md
 RUN chmod 0644 /etc/AGENTS.md
 ARG TARGETARCH
 # python3-minimal (about 13 MB): agents often check their work with a short python3 script (pilot F18).
-# OpenCode 2 (@opencode/cli): its postinstall picks the native binary for the image's platform.
+# Keep OpenCode's pinned package/metadata, but ship one portable glibc binary.
+# npm installs all matching optional variants (including musl and AVX2) otherwise.
+# Select x64-baseline explicitly: the builder's CPU may differ from the user's.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3-minimal \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install --global --no-audit --no-fund @opencode/cli@2.0.32 \
+    && npm install --global --ignore-scripts --no-audit --no-fund @opencode/cli@2.0.32 \
+    && case "$TARGETARCH" in \
+         amd64) opencode_native=cli-linux-x64-baseline ;; \
+         arm64) opencode_native=cli-linux-arm64 ;; \
+         *) echo "Unsupported OpenCode image architecture: $TARGETARCH" >&2; exit 1 ;; \
+       esac \
+    && install -m 0755 \
+      "/usr/local/lib/node_modules/@opencode/cli/node_modules/@opencode/$opencode_native/bin/opencode" \
+      /usr/local/lib/node_modules/@opencode/cli/bin/opencode.exe \
+    && rm -rf /usr/local/lib/node_modules/@opencode/cli/node_modules \
+    && opencode --version \
+    && opencode2 --version \
     && install -d -o spaceapp -g spaceapp -m 0700 /var/lib/spaceapp-cli/vendor \
     && npm cache clean --force \
     && install -d -o spaceapp -g spaceapp -m 0700 \
