@@ -3,7 +3,20 @@
   "schemaVersion": 2,
   "sourceCommit": "25bcec3e772b21e7543146c971d5fb1a4d95edc0",
   "fileCount": 5029,
-  "transformations": 435,
+  "transformations": 436,
+  "publicUpdates": [
+    {
+      "path": "README.md",
+      "repository": "https://github.com/oll4com/spaceapp",
+      "commit": "7ca2a90c2f1b71879060d91962288dd4d10e32b8",
+      "objectId": "60a8f6a7381c1426e33732093c374671102da43f",
+      "previousSha256": "22aad698d707aedba6b5f742dc8e19a15134c8f651dd06fe2c7c244299eac6c6",
+      "previousSize": 34440,
+      "sha256": "c3db5ad478f0c90b4ddc801e020641751638a222b5054633a084274fb68fdb05",
+      "size": 34874,
+      "reason": "Public upstream README badge update after the recorded private export; the original sourceCommit and sourceObjectId are retained."
+    }
+  ],
   "files": [
     {
       "path": ".gitignore",
@@ -32,8 +45,8 @@
     {
       "path": "README.md",
       "sourceObjectId": "078edf8e23fc91cf7518a339a3f8129b5c9fbd1b",
-      "sha256": "22aad698d707aedba6b5f742dc8e19a15134c8f651dd06fe2c7c244299eac6c6",
-      "size": 34440
+      "sha256": "c3db5ad478f0c90b4ddc801e020641751638a222b5054633a084274fb68fdb05",
+      "size": 34874
     },
     {
       "path": "THIRD_PARTY_LICENSES/caveman.txt",
